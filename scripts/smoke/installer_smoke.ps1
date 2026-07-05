@@ -55,6 +55,12 @@ if ($proc.ExitCode -ne 0) {
 $exe = Join-Path $InstallDir "STT-AIO.exe"
 $version = Test-SttAioExeVersion -Exe $exe -ExpectedVersion $expectedVersion
 
+Write-Host "installer_smoke: packaged functional smoke (--smoke)"
+$env:QT_QPA_PLATFORM = "offscreen"
+& $exe --smoke
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
+
 Write-Host "installer_smoke: upgrade reinstall (same dir)"
 $upgrade = Start-Process -FilePath $SetupExe -ArgumentList $installArgs -Wait -PassThru
 if ($upgrade.ExitCode -ne 0) {
