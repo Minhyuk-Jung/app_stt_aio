@@ -196,3 +196,33 @@ def test_download_installs_catalog_model_locally(manager: ModelManager) -> None:
     assert path == dest
     assert manager.is_installed("tiny") is True
     assert (dest / ".stt_aio_installed.json").is_file()
+
+
+def test_download_progress_works_when_stderr_is_none(
+    manager: ModelManager, monkeypatch
+) -> None:
+    """Regression: frozen GUI apps have stderr=None; tqdm must not crash."""
+    import sys
+
+    monkeypatch.setattr(sys, "stderr", None)
+    dest = manager.models_dir / "tiny"
+    progress: list[tuple[int, int, str]] = []
+
+    def fake_snapshot(**kwargs):
+        tqdm_class = kwargs.get("tqdm_class")
+        assert tqdm_class is not None
+        bar = tqdm_class(total=1024 * 1024)
+        bar.update(512 * 1024)
+        bar.update(512 * 1024)
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / "model.bin").write_bytes(b"ok")
+        return str(dest)
+
+    def on_progress(downloaded: int, total: int, state: str) -> None:
+        progress.append((downloaded, total, state))
+
+    with patch("huggingface_hub.snapshot_download", side_effect=fake_snapshot):
+        manager.download("tiny", on_progress=on_progress)
+
+    assert any(p[2] == "downloading" for p in progress)
+    assert manager.is_installed("tiny") is True

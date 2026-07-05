@@ -12,6 +12,11 @@ def main() -> int:
         print(__version__)
         return 0
 
+    if "--smoke" in sys.argv:
+        from app.packaged_smoke import run_packaged_smoke
+
+        return run_packaged_smoke()
+
     from core.diagnostics import setup_app_logging
     from core.paths import ensure_app_dirs, get_app_paths
 

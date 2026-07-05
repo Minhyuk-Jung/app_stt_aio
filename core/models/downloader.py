@@ -54,10 +54,18 @@ def _make_hf_tqdm_class(
     expected_mb: int,
     controller: DownloadController | None,
 ):
-    """Bridge huggingface_hub tqdm → app progress callback (MB)."""
+    """Bridge huggingface_hub tqdm → app progress callback (MB).
+
+    disable=True: PyInstaller GUI builds often have sys.stderr=None; tqdm would
+    crash with AttributeError on write().
+    """
     from tqdm.auto import tqdm
 
     class _DownloadTqdm(tqdm):
+        def __init__(self, *args, **kwargs):
+            kwargs["disable"] = True
+            super().__init__(*args, **kwargs)
+
         def update(self, n=1):
             super().update(n)
             if controller is not None:

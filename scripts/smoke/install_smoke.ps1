@@ -21,4 +21,8 @@ if ($size -lt 1024) {
 $expected = Get-ExpectedVersionFromManifest -Root $root
 $version = Test-SttAioExeVersion -Exe $exe -ExpectedVersion $expected
 
+Write-Host "bundle_smoke: packaged functional smoke (--smoke)"
+& $exe --smoke
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 Write-Host "install_smoke_ok exe=$exe size=$size version=$version"
