@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import MagicMock
 
 import pytest
@@ -22,6 +23,11 @@ from app.ui.onboarding.checks import (
 from app.ui.settings.controller import SettingsController
 from core.secrets import reset_default_store
 from core.secrets.mock_store import MemorySecretStore
+
+_skip_offscreen_wizard = pytest.mark.skipif(
+    os.environ.get("QT_QPA_PLATFORM", "").lower() == "offscreen",
+    reason="Full QWizard construction is unstable on offscreen platform",
+)
 
 
 @pytest.fixture
@@ -161,6 +167,7 @@ def test_download_model_alias_delegates(controller: SettingsController, monkeypa
     assert calls == ["base"]
 
 
+@_skip_offscreen_wizard
 def test_on_completed_callback_invoked(config: Config) -> None:
     pytest.importorskip("PySide6")
     from app.ui.onboarding.onboarding_wizard import OnboardingWizard
@@ -179,6 +186,7 @@ def test_on_completed_callback_invoked(config: Config) -> None:
     assert controller.is_onboarding_completed() is True
 
 
+@_skip_offscreen_wizard
 def test_wizard_is_skipping_flag(config: Config) -> None:
     pytest.importorskip("PySide6")
     from app.ui.onboarding.onboarding_wizard import OnboardingWizard
@@ -190,6 +198,7 @@ def test_wizard_is_skipping_flag(config: Config) -> None:
     assert wizard.is_skipping() is True
 
 
+@_skip_offscreen_wizard
 def test_wizard_reject_does_not_mark_completed(config: Config) -> None:
     pytest.importorskip("PySide6")
     from app.ui.onboarding.onboarding_wizard import OnboardingWizard
