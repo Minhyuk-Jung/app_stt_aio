@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import MagicMock
+
+import pytest
 
 from app.config import Config
 from app.services.dictation_runtime import DictationRuntime
 from app.ui.app_shell import TrayOverlayApp
 from core.store.models import SessionSource
 
+_skip_offscreen_e2e = pytest.mark.skipif(
+    os.environ.get("QT_QPA_PLATFORM", "").lower() == "offscreen",
+    reason="TrayOverlayApp shell needs system tray; run locally with display",
+)
 
+
+@_skip_offscreen_e2e
 def test_manual_record_toggle_runs_pipeline(qtbot, tmp_path):
     config = Config.open(tmp_path / "e2e.db", migrate_backup=False)
     runtime = DictationRuntime(

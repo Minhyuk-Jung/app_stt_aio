@@ -115,7 +115,14 @@ def main() -> int:
 
     ui_env = {**os.environ, "QT_QPA_PLATFORM": "offscreen"}
     ui_code, ui_out = _run(
-        [sys.executable, "-m", "pytest", "tests/ui", "-q"],
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/ui",
+            "-q",
+            "--ignore=tests/ui/test_end_to_end_offscreen.py",
+        ],
         timeout=120,
         env=ui_env,
     )

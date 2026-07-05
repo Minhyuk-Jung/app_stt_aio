@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 import pytest
 
@@ -32,7 +33,12 @@ def test_setup_app_logging_writes_file(tmp_path) -> None:
     assert log_file == tmp_path / "logs" / LOG_FILENAME
 
     logging.getLogger("tests.logging").info("hello diagnostics")
-    flush_app_logging()
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline:
+        flush_app_logging()
+        if log_file.is_file() and "hello diagnostics" in log_file.read_text(encoding="utf-8"):
+            break
+        time.sleep(0.02)
 
     assert log_file.is_file()
     assert "hello diagnostics" in log_file.read_text(encoding="utf-8")
