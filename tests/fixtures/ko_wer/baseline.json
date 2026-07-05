@@ -1,0 +1,34 @@
+{
+  "max_wer": 0.15,
+  "cases": [
+    {
+      "id": "greeting",
+      "reference": "안녕하세요 반갑습니다",
+      "audio_file": "greeting.wav",
+      "max_wer": 0.65
+    },
+    {
+      "id": "meeting",
+      "reference": "오늘 회의 내용을 정리합니다",
+      "audio_file": "meeting.wav",
+      "max_wer": 0.65
+    },
+    {
+      "id": "mixed_noise",
+      "reference": "STT-AIO 한국어 받아쓰기 테스트입니다",
+      "hypothesis": "STT-AIO 한국어 받아쓰기 테스트입니다"
+    },
+    {
+      "id": "minor_spacing",
+      "reference": "다음 주 월요일에 다시 연락드리겠습니다",
+      "hypothesis": "다음주 월요일에 다시 연락 드리겠습니다",
+      "max_wer": 0.85
+    },
+    {
+      "id": "silence_200ms",
+      "audio_file": "silence_200ms.wav",
+      "reference": "",
+      "max_wer": 1.0
+    }
+  ]
+}

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>STT-AIO Remote</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 28rem; margin: 2rem auto; padding: 0 1rem; }
+    button { font-size: 1.1rem; padding: 0.75rem 1.25rem; margin: 0.5rem 0; width: 100%; }
+    input { width: 100%; padding: 0.5rem; font-size: 1rem; box-sizing: border-box; }
+    #status { margin-top: 1rem; color: #333; white-space: pre-wrap; }
+    .notice { font-size: 0.9rem; color: #555; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>원격 녹음</h1>
+  <p class="notice">오디오는 PC로 전송되어 받아쓰기됩니다. 모바일 마이크는 HTTPS 연결이 필요합니다.</p>
+  <label for="pin">페어링 PIN</label>
+  <input id="pin" type="text" inputmode="numeric" maxlength="4" placeholder="0000" />
+  <button id="pairBtn" type="button">페어링</button>
+  <button id="recordBtn" type="button" disabled>녹음 시작</button>
+  <div id="status">PIN을 입력한 뒤 페어링하세요.</div>
+  <script>
+    const TOKEN_KEY = "stt_aio_token";
+    const CHUNK_SIZE = 512 * 1024;
+    const CHUNK_THRESHOLD = 512 * 1024;
+    let token = localStorage.getItem(TOKEN_KEY) || "";
+    let mediaRecorder = null;
+    let audioParts = [];
+    const status = document.getElementById("status");
+    const recordBtn = document.getElementById("recordBtn");
+
+    function setStatus(msg) { status.textContent = msg; }
+
+    function clearToken() {
+      token = "";
+      localStorage.removeItem(TOKEN_KEY);
+      recordBtn.disabled = true;
+    }
+
+    function pickRecorderMime() {
+      const candidates = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/ogg;codecs=opus",
+      ];
+      for (const type of candidates) {
+        if (MediaRecorder.isTypeSupported(type)) return type;
+      }
+      return "";
+    }
+
+    async function authFetch(url, options, attemptLabel) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const res = await fetch(url, options);
+        if (res.status === 401) {
+          clearToken();
+          setStatus("인증이 만료되었습니다. PIN으로 다시 페어링하세요.");
+          return res;
+        }
+        if (res.ok) {
+          return res;
+        }
+        if (attempt < 3) {
+          setStatus((attemptLabel || "요청") + " 재시도 중… (" + attempt + "/3)");
+          await new Promise((r) => setTimeout(r, 800 * attempt));
+          continue;
+        }
+        return res;
+      }
+      throw new Error("unreachable");
+    }
+
+    function buildChunkForm(uploadId, index, part, filename, isFinal) {
+      const form = new FormData();
+      form.append("upload_id", uploadId);
+      form.append("chunk_index", String(index));
+      form.append("is_final", isFinal ? "true" : "false");
+      form.append("file", part, filename);
+      return form;
+    }
+
+    async function uploadOneChunk(uploadId, index, part, filename, isFinal, total) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        setStatus("청크 업로드 " + (index + 1) + "/" + total + (attempt > 1 ? " (재시도 " + attempt + ")" : "") + "…");
+        const res = await fetch("/api/v1/transcribe/chunk", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + token },
+          body: buildChunkForm(uploadId, index, part, filename, isFinal),
+        });
+        if (res.status === 401) {
+          clearToken();
+          setStatus("인증이 만료되었습니다. PIN으로 다시 페어링하세요.");
+          return null;
+        }
+        if (res.ok) {
+          return res;
+        }
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 800 * attempt));
+        } else {
+          const body = await res.json().catch(() => ({}));
+          setStatus("청크 업로드 실패: " + JSON.stringify(body));
+          return null;
+        }
+      }
+      return null;
+    }
+
+    async function uploadBlobChunked(blob, filename) {
+      const initRes = await authFetch(
+        "/api/v1/transcribe/chunks/init",
+        { method: "POST", headers: { Authorization: "Bearer " + token } },
+        "청크 초기화",
+      );
+      if (!initRes.ok) {
+        const body = await initRes.json().catch(() => ({}));
+        setStatus("청크 초기화 실패: " + JSON.stringify(body));
+        return;
+      }
+      const uploadId = (await initRes.json()).upload_id;
+      const total = Math.max(1, Math.ceil(blob.size / CHUNK_SIZE));
+      let index = 0;
+      let outerFail = 0;
+      const MAX_OUTER_RETRY = 3;
+      while (index < total) {
+        const start = index * CHUNK_SIZE;
+        const part = blob.slice(start, Math.min(start + CHUNK_SIZE, blob.size));
+        const isFinal = index === total - 1;
+        const res = await uploadOneChunk(uploadId, index, part, filename, isFinal, total);
+        if (!res) {
+          outerFail += 1;
+          if (outerFail >= MAX_OUTER_RETRY) {
+            setStatus("청크 업로드를 중단했습니다. 네트워크 확인 후 다시 녹음하세요.");
+            return;
+          }
+          setStatus("청크 " + (index + 1) + " 실패 — 같은 업로드에서 재시도 (" + outerFail + "/" + MAX_OUTER_RETRY + ")…");
+          await new Promise((r) => setTimeout(r, 1500 * outerFail));
+          continue;
+        }
+        outerFail = 0;
+        if (isFinal) {
+          const body = await res.json().catch(() => ({}));
+          if (body.session_id) {
+            setStatus("업로드 완료(청크): " + JSON.stringify(body));
+          } else {
+            setStatus("청크 수신 완료: " + JSON.stringify(body));
+          }
+          return;
+        }
+        index += 1;
+      }
+    }
+
+    async function uploadBlob(blob, filename) {
+      if (blob.size >= CHUNK_THRESHOLD) {
+        return uploadBlobChunked(blob, filename);
+      }
+      const form = new FormData();
+      form.append("file", blob, filename);
+      const res = await authFetch(
+        "/api/v1/transcribe",
+        {
+          method: "POST",
+          headers: { Authorization: "Bearer " + token },
+          body: form,
+        },
+        "업로드",
+      );
+      if (res.status === 401) {
+        return;
+      }
+      if (res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setStatus("업로드 완료: " + JSON.stringify(body));
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      setStatus("업로드 실패: " + JSON.stringify(body));
+    }
+
+    if (token) {
+      recordBtn.disabled = false;
+      setStatus("저장된 토큰으로 녹음할 수 있습니다.");
+    }
+
+    document.getElementById("pairBtn").onclick = async () => {
+      const pin = document.getElementById("pin").value.trim();
+      const res = await fetch("/api/v1/pair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin }),
+      });
+      if (res.status === 429) {
+        setStatus("시도 횟수가 많습니다. 잠시 후 다시 페어링하세요.");
+        return;
+      }
+      if (!res.ok) {
+        setStatus("페어링 실패: PIN을 확인하세요.");
+        return;
+      }
+      const data = await res.json();
+      token = data.token;
+      localStorage.setItem(TOKEN_KEY, token);
+      recordBtn.disabled = false;
+      setStatus("페어링 완료. 녹음을 시작할 수 있습니다.");
+    };
+
+    recordBtn.onclick = async () => {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+        recordBtn.textContent = "녹음 시작";
+        return;
+      }
+      if (!token) {
+        setStatus("먼저 PIN으로 페어링하세요.");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioParts = [];
+        const mimeType = pickRecorderMime();
+        const options = mimeType ? { mimeType } : undefined;
+        mediaRecorder = new MediaRecorder(stream, options);
+        mediaRecorder.ondataavailable = (e) => { if (e.data.size) audioParts.push(e.data); };
+        mediaRecorder.onstop = async () => {
+          const type = mediaRecorder.mimeType || mimeType || "audio/webm";
+          const ext = type.includes("mp4") ? "m4a" : "webm";
+          const blob = new Blob(audioParts, { type });
+          setStatus("업로드 중… (" + Math.round(blob.size / 1024) + " KiB)");
+          await uploadBlob(blob, "recording." + ext);
+          stream.getTracks().forEach((t) => t.stop());
+        };
+        mediaRecorder.start();
+        recordBtn.textContent = "녹음 정지";
+        setStatus("녹음 중…");
+      } catch (err) {
+        setStatus("마이크 접근 실패: " + err);
+      }
+    };
+  </script>
+</body>
+</html>

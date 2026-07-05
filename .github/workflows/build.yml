@@ -1,0 +1,39 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and smoke
+        uses: ./.github/actions/windows-build-smoke
+
+      - name: Generate C22 update manifest template
+        run: python build/generate_update_manifest.py --allow-placeholder
+
+      - name: Verify C22 update manifest
+        run: python build/generate_update_manifest.py --verify-only --allow-placeholder
+
+      - name: Verify CI workflow definition (P6)
+        run: python scripts/smoke/verify_ci_workflow.py
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stt-aio-windows
+          path: |
+            dist/STT-AIO/
+            dist/STT-AIO-portable-*.zip
+            dist/installer/STT-AIO-Setup-*.exe
+            dist/installer/build-manifest.json
+            dist/installer/update-manifest.json
+            dist/installer/SMARTSCREEN.txt
+          if-no-files-found: error

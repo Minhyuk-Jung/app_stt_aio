@@ -1,0 +1,10 @@
+{
+  "cold_start_warmup_ms": 3000,
+  "first_transcribe_ms": 2000,
+  "app_import_ms": 3000,
+  "realtime_target_ms": 1000,
+  "idle_cpu_percent": 1.0,
+  "idle_cpu_sample_sec": 1.5,
+  "packaged_startup_sec": 3.0,
+  "idle_memory_mb_max": 500
+}

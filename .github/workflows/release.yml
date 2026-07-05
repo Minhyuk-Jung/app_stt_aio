@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.2.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and smoke
+        uses: ./.github/actions/windows-build-smoke
+
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify release tag matches build-manifest
+        run: python scripts/release/verify_release_tag.py --tag ${{ steps.tag.outputs.value }}
+
+      - name: Prepare C22 release manifest (GitHub URL)
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python scripts/release/prepare_release_manifest.py --github-release --tag ${{ steps.tag.outputs.value }}
+
+      - name: Verify C22 release manifest (strict)
+        run: python build/generate_update_manifest.py --verify-only
+
+      - name: Verify CI workflow definition (P6)
+        run: python scripts/smoke/verify_ci_workflow.py
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.value }}
+          name: STT-AIO ${{ steps.tag.outputs.value }}
+          generate_release_notes: true
+          files: |
+            dist/STT-AIO-portable-*.zip
+            dist/installer/STT-AIO-Setup-*.exe
+            dist/installer/build-manifest.json
+            dist/installer/update-manifest.json
+            dist/installer/SMARTSCREEN.txt

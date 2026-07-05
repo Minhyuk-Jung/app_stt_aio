@@ -1,0 +1,65 @@
+name: Windows build smoke
+description: Shared test, build, and installer smoke steps for build.yml and release.yml (P6)
+
+inputs:
+  python-version:
+    description: Python version
+    required: false
+    default: "3.11"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+
+    - name: Install dependencies
+      shell: pwsh
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r build/requirements-ci.txt
+        pip install -e ".[ui,stt,export,dev,build]"
+
+    - name: Run tests
+      shell: pwsh
+      run: python -m pytest tests/ -q --ignore=tests/ui
+
+    - name: Remote gateway tests (P4/P5)
+      shell: pwsh
+      run: python -m pytest tests/remote tests/services/test_remote_gateway_service.py -q
+
+    - name: Tunnel live smoke (optional)
+      shell: pwsh
+      continue-on-error: true
+      run: python scripts/smoke/tunnel_live_smoke.py
+
+    - name: Korean WER regression (non-integration)
+      shell: pwsh
+      run: python -m pytest tests/regression/ko_wer -q -m "not integration"
+
+    - name: Build PyInstaller bundle and portable zip
+      shell: pwsh
+      run: python build/build.py --portable
+
+    - name: Bundle smoke (exe + version)
+      shell: pwsh
+      run: powershell -ExecutionPolicy Bypass -File scripts/smoke/bundle_smoke.ps1 -RequireExe
+
+    - name: Install Inno Setup
+      shell: pwsh
+      run: choco install innosetup -y --no-progress
+
+    - name: Build Inno Setup installer
+      shell: pwsh
+      run: python build/build.py --installer --skip-pyinstaller --require-installer
+
+    - name: Installer smoke (silent install)
+      shell: pwsh
+      run: powershell -ExecutionPolicy Bypass -File scripts/smoke/installer_smoke.ps1
+
+    - name: Verify installer manifest (C16)
+      shell: pwsh
+      run: python build/verify_installer.py

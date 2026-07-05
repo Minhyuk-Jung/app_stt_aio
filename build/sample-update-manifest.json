@@ -1,0 +1,10 @@
+{
+  "version": "0.2.0",
+  "download_url": "https://github.com/OWNER/stt-aio/releases/download/v0.2.0/STT-AIO-Setup-0.2.0.exe",
+  "checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "release_notes": "예시 릴리스 — 실제 배포 시 checksum·URL을 build-manifest.json 기준으로 교체하세요.",
+  "mandatory": false,
+  "notes_by_version": {
+    "0.2.0": "- P5 안정화\n- 원격 게이트웨이 청크 업로드\n- 업데이트 2단계(다운로드·검증)"
+  }
+}
