@@ -18,6 +18,10 @@ class FakeTasks:
         self.on_finished = on_finished
         self.on_failed = on_failed
 
+    def run_stt_readiness(self, controller, *, on_finished, on_failed) -> None:
+        self.on_readiness_finished = on_finished
+        self.on_readiness_failed = on_failed
+
 
 def _make_page():
     controller = MagicMock()
@@ -58,3 +62,16 @@ def test_download_failure_shows_retry(qtbot):
     tasks.on_failed("network error")
 
     assert not page._retry_btn.isHidden()
+
+
+def test_readiness_check_updates_status(qtbot):
+    from app.ui.settings.controller import ReadinessResult
+
+    page, _controller, tasks = _make_page()
+    qtbot.addWidget(page)
+
+    page._check_readiness()
+    tasks.on_readiness_finished(ReadinessResult(True, "STT 준비됨"))
+
+    assert "✓" in page._status.text()
+    assert "STT 준비됨" in page._status.text()
