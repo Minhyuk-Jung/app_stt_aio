@@ -26,7 +26,7 @@ def _env_flag(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes"}
 
 
-def _run(cmd: list[str], *, timeout: int = 600) -> tuple[int, str]:
+def _run(cmd: list[str], *, timeout: int = 600, env: dict[str, str] | None = None) -> tuple[int, str]:
     completed = subprocess.run(
         cmd,
         cwd=str(ROOT),
@@ -34,6 +34,7 @@ def _run(cmd: list[str], *, timeout: int = 600) -> tuple[int, str]:
         text=True,
         timeout=timeout,
         check=False,
+        env=env,
     )
     out = (completed.stdout or completed.stderr or "").strip()
     return completed.returncode, out
@@ -111,6 +112,14 @@ def main() -> int:
 
     code, out = _run([sys.executable, "-m", "pytest", "tests/", "-q", "--ignore=tests/ui"])
     checks.append(("pytest (UI 제외)", code, out))
+
+    ui_env = {**os.environ, "QT_QPA_PLATFORM": "offscreen"}
+    ui_code, ui_out = _run(
+        [sys.executable, "-m", "pytest", "tests/ui", "-q"],
+        timeout=120,
+        env=ui_env,
+    )
+    checks.append(("pytest UI (offscreen)", ui_code, ui_out))
 
     code, out = _run(
         [sys.executable, "-m", "pytest", "tests/regression/ko_wer", "-q", "-m", "not integration"],

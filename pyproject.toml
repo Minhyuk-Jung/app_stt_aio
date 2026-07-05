@@ -15,7 +15,7 @@ ui = ["PySide6>=6.6", "qrcode>=7.4", "pillow>=10.0"]
 remote = ["fastapi>=0.110", "uvicorn>=0.27", "python-multipart>=0.0.9"]
 vad = ["torch>=2.0"]
 build = ["pyinstaller>=6.0"]
-dev = ["pytest>=8.0", "python-docx>=1.1.0", "httpx>=0.27", "fastapi>=0.110", "python-multipart>=0.0.9", "psutil>=5.9"]
+dev = ["pytest>=8.0", "python-docx>=1.1.0", "httpx>=0.27", "fastapi>=0.110", "python-multipart>=0.0.9", "psutil>=5.9", "pytest-qt>=4.4"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -27,6 +27,12 @@ runs:
       shell: pwsh
       run: python -m pytest tests/ -q --ignore=tests/ui
 
+    - name: UI tests (offscreen)
+      shell: pwsh
+      env:
+        QT_QPA_PLATFORM: offscreen
+      run: python -m pytest tests/ui -q
+
     - name: Remote gateway tests (P4/P5)
       shell: pwsh
       run: python -m pytest tests/remote tests/services/test_remote_gateway_service.py -q

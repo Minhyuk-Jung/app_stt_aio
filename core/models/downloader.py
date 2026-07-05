@@ -48,6 +48,35 @@ def check_disk_space(dest_parent: Path, required_mb: int) -> None:
         )
 
 
+def _make_hf_tqdm_class(
+    *,
+    on_progress: ProgressCallback | None,
+    expected_mb: int,
+    controller: DownloadController | None,
+):
+    """Bridge huggingface_hub tqdm → app progress callback (MB)."""
+    from tqdm.auto import tqdm
+
+    class _DownloadTqdm(tqdm):
+        def update(self, n=1):
+            super().update(n)
+            if controller is not None:
+                controller.raise_if_canceled()
+                if self.total:
+                    controller.update_progress(int(self.n), int(self.total))
+            if on_progress is not None:
+                total_bytes = int(self.total or 0)
+                if total_bytes > 0:
+                    downloaded_mb = int(self.n) // (1024 * 1024)
+                    total_mb = max(expected_mb, total_bytes // (1024 * 1024))
+                else:
+                    downloaded_mb = 0
+                    total_mb = expected_mb
+                on_progress(downloaded_mb, total_mb, "downloading")
+
+    return _DownloadTqdm
+
+
 def _snapshot_to_dir(
     repo_id: str,
     dest_dir: Path,
@@ -60,28 +89,21 @@ def _snapshot_to_dir(
 
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    def hf_progress(progress) -> None:
-        if controller is not None:
-            controller.raise_if_canceled()
-            downloaded = int(getattr(progress, "downloaded", 0) or 0)
-            total = int(getattr(progress, "total", 0) or 0)
-            controller.update_progress(downloaded, total)
-        if on_progress is not None and expected_mb:
-            downloaded_mb = 0
-            total_mb = expected_mb
-            if controller is not None and controller.total_bytes:
-                downloaded_mb = controller.downloaded_bytes // (1024 * 1024)
-                total_mb = max(expected_mb, controller.total_bytes // (1024 * 1024))
-            on_progress(downloaded_mb, total_mb, "downloading")
-
     kwargs: dict = {
         "repo_id": repo_id,
         "local_dir": str(dest_dir),
         "local_dir_use_symlinks": False,
         "resume_download": True,
     }
+    tqdm_class = None
+    if on_progress is not None or controller is not None:
+        tqdm_class = _make_hf_tqdm_class(
+            on_progress=on_progress,
+            expected_mb=expected_mb,
+            controller=controller,
+        )
     try:
-        snapshot_download(**kwargs, tqdm_class=None)
+        snapshot_download(**kwargs, tqdm_class=tqdm_class)
     except TypeError:
         try:
             snapshot_download(**kwargs)

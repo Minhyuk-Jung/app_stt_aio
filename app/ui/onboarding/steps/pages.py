@@ -328,8 +328,13 @@ class ModelPage(QWizardPage):
         def on_progress(downloaded: int, total: int, state: str) -> None:
             if total > 0:
                 self._progress.setRange(0, total)
-                self._progress.setValue(downloaded)
-            self._progress_label.setText(state)
+                self._progress.setValue(min(downloaded, total))
+                pct = 100 * downloaded // total
+                self._progress_label.setText(
+                    f"{state} ({pct}%) — {downloaded}/{total} MB"
+                )
+            else:
+                self._progress_label.setText(state)
 
         def on_finished(_path: str) -> None:
             self._download_btn.setEnabled(True)

@@ -24,6 +24,25 @@ from core.store.models import SessionSource
 logger = logging.getLogger(__name__)
 
 
+def start_hotkey_safe(hotkey, tray) -> bool:
+    """Start global hotkeys; degrade gracefully on registration failure.
+
+    Returns True if hotkeys registered, False if unavailable.
+    """
+    from app.hotkey.errors import HotkeyRegistrationError
+
+    try:
+        hotkey.start()
+        return True
+    except HotkeyRegistrationError as exc:
+        logger.error("Global hotkey unavailable: %s", exc)
+        tray.show_message(
+            "STT-AIO",
+            "전역 핫키를 등록하지 못했습니다. 트레이 아이콘 → 녹음 시작/정지를 사용하세요.",
+        )
+        return False
+
+
 class TrayOverlayApp:
     """P1 desktop shell: tray menu + status overlay."""
 
@@ -87,7 +106,7 @@ class TrayOverlayApp:
     def run(self) -> int:
         self._bridge._emit_display_state(OverlayDisplayState.IDLE)
         self._tray.show()
-        self._runtime.hotkey.start()
+        start_hotkey_safe(self._runtime.hotkey, self._tray)
         from app.ui.onboarding import is_completed
 
         if not is_completed(self._runtime.config):
