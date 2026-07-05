@@ -6,6 +6,7 @@ import json
 import logging
 import sys
 import threading
+import time
 import zipfile
 from pathlib import Path
 
@@ -14,7 +15,7 @@ import pytest
 from app.config import Config
 from core.diagnostics.diagnostics import _redact_path, collect_environment, export_diagnostics
 from core.diagnostics.masking_filter import MaskingFormatter
-from core.diagnostics.logging_setup import reset_app_logging, setup_app_logging
+from core.diagnostics.logging_setup import flush_app_logging, reset_app_logging, setup_app_logging
 from core.secrets import reset_default_store
 from core.secrets.mock_store import MemorySecretStore
 
@@ -101,8 +102,12 @@ def test_concurrent_logging_writes(config: Config, tmp_path) -> None:
         thread.join()
 
     log_file = logs_dir / "stt-aio.log"
-    for handler in logging.getLogger().handlers:
-        handler.flush()
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline:
+        flush_app_logging()
+        if log_file.read_text(encoding="utf-8").count("line-") >= 20:
+            break
+        time.sleep(0.02)
     text = log_file.read_text(encoding="utf-8")
     assert text.count("line-") >= 20
 
